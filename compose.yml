@@ -1,0 +1,73 @@
+services:
+  backend:
+    container_name: boilerplate_backend
+    build:
+      context: .
+    restart: always
+    ports:
+      - 8080:8080
+    environment:
+      PORT: 8080
+      ENVIRONMENT: local
+      DATABASE_URL: postgres://admin:password@postgres:5432/database?sslmode=disable
+      LOG_LEVEL: debug
+      API_BASE_PATH: /v1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - net
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+          target: /app/
+          # ignore: ./sqlc/*
+    profiles:
+      - backend
+
+  postgres:
+    image: postgres:latest
+    restart: always
+    container_name: boilerplate_postgres
+    environment:
+      POSTGRES_DB: database
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    # volumes:
+    #   - psql_volume_bp:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U admin -d database'"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - net
+    profiles:
+      - backend
+      - data
+
+  postgres-pgweb:
+    container_name: boilerplate_postgres_pgweb
+    image: sosedoff/pgweb:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - PGWEB_DATABASE_URL=postgres://admin:password@postgres:5432/database?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - net
+    profiles:
+      - backend
+      - data
+
+# volumes:
+#   psql_volume_bp:
+
+networks:
+  net:
