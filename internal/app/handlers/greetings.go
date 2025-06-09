@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
-	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -30,18 +30,19 @@ func (h *GreetingHandler) GetGreeting(ctx context.Context, input *models.Greetin
 		return nil, huma.Error404NotFound("no greeting for bob")
 	}
 
-	t, ok := ctx.Value(middleware.CtxRequest{}).(*http.Request)
-
+	request, ok := ctx.Value(middleware.CtxRequest{}).(*http.Request)
 	if !ok {
-		log.Error().Msgf("Error: Could not get http.Request from context, key=%v context.t=%v", middleware.CtxRequest{}, t)
+		log.Error().Msgf("Error: Could not get http.Request from context, key=%v context.t=%v", middleware.CtxRequest{}, request)
 		return nil, huma.Error500InternalServerError("Can't retrieve user Ip")
 	}
-	ip := strings.Split(t.RemoteAddr, ":")[0]
-
+	host, _, err := net.SplitHostPort(request.RemoteAddr)
+	if err != nil {
+		host = request.RemoteAddr
+	}
 	res, err2 := h.Queries.InsertVisit(
 		ctx,
 		store.InsertVisitParams{
-			Ip:   ip,
+			Ip:   host,
 			Name: input.Name,
 		},
 	)
@@ -54,3 +55,4 @@ func (h *GreetingHandler) GetGreeting(ctx context.Context, input *models.Greetin
 	resp.Body.Message = fmt.Sprintf("Hello, %s!", res.Name)
 	return resp, nil
 }
+
