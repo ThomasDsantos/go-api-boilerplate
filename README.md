@@ -13,6 +13,9 @@ using:
 - [migrate](https://github.com/golang-migrate/migrate) for db migrations
 - postgresSQL
 
+## preview
+
+![Documentation preview](./images/docs.png)
 
 ## start
 
