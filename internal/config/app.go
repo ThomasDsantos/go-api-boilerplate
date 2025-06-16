@@ -19,7 +19,7 @@ func Load() (*ServerConfig, error) {
 	logLevelStr := getEnv("LOG_LEVEL", "info")
 	environment := getEnv("ENVIRONMENT", "local")
 	apiBasePath := getEnv("API_BASE_PATH", "/v1")
-	ServiceName := getEnv("SERVICE_NAME", "api")
+	serviceName := getEnv("SERVICE_NAME", "api")
 
 	logLevel, err := zerolog.ParseLevel(logLevelStr)
 	if err != nil {
@@ -32,7 +32,7 @@ func Load() (*ServerConfig, error) {
 		LogLevel:    logLevel,
 		Environment: environment,
 		APIBasePath: apiBasePath,
-		ServiceName: ServiceName,
+		ServiceName: serviceName,
 	}, nil
 }
 
@@ -42,4 +42,3 @@ func getEnv(key, fallback string) string {
 	}
 	return fallback
 }
-

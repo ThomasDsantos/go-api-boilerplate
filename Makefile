@@ -6,7 +6,10 @@ generate-sql:
 	sqlc generate
 
 lint:
-	docker run --rm -v .:/app -w /app golangci/golangci-lint:v2.1.6 golangci-lint run
+	@echo "*formating*"
+	@docker run --rm -v .:/app -w /app golangci/golangci-lint:v2.1.6 golangci-lint fmt
+	@echo "*running lint*"
+	@docker run --rm -v .:/app -w /app golangci/golangci-lint:v2.1.6 golangci-lint run
 
 compose:
 	@docker compose --profile="*" down --remove-orphans && \

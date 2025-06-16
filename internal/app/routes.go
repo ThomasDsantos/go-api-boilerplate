@@ -17,7 +17,18 @@ import (
 	"backend/internal/app/middleware"
 )
 
-func (a *App) loadRoutes(api huma.API) {
+func (a *App) loadAppRoutes(api huma.API) {
+	greetingHandler := handlers.NewHealthHandler(a.DB)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-health",
+		Method:      http.MethodGet,
+		Path:        "/health",
+		Summary:     "Get application health",
+	}, greetingHandler.GetHealth)
+}
+
+func (a *App) loadGreetingRoutes(api huma.API) {
 	greetingHandler := handlers.NewGreetingHandler(a.Store)
 
 	huma.Register(api, huma.Operation{
@@ -28,7 +39,12 @@ func (a *App) loadRoutes(api huma.API) {
 	}, greetingHandler.GetGreeting)
 }
 
-func (a *App) getApiRouter() *chi.Mux {
+func (a *App) loadRoutes(api huma.API) {
+	a.loadAppRoutes(api)
+	a.loadGreetingRoutes(api)
+}
+
+func (a *App) getAPIRouter() *chi.Mux {
 	apiSubRouter := chi.NewRouter()
 	humaCfg := huma.DefaultConfig(a.Config.ServiceName, "1.0.0")
 	humaCfg.Info.Contact = &huma.Contact{Email: "dev@example.com"}
@@ -45,14 +61,14 @@ func (a *App) getApiRouter() *chi.Mux {
 	return apiSubRouter
 }
 
-func (a *App) createServer() (*http.Server, error) {
+func (a *App) createServer() {
 	router := chi.NewRouter()
 	router.Use(chiMiddleware.RequestID)
 	router.Use(chiMiddleware.RealIP)
 	router.Use(chiMiddleware.Recoverer)
 
 	router.Use(hlog.NewHandler(log.Logger))
-	router.Use(hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
+	router.Use(hlog.AccessHandler(func(r *http.Request, status, _ int, duration time.Duration) {
 		hlog.FromRequest(r).Info().
 			Str("method", r.Method).
 			Stringer("url", r.URL).
@@ -63,7 +79,7 @@ func (a *App) createServer() (*http.Server, error) {
 	router.Use(hlog.RemoteAddrHandler("ip"))
 	router.Use(middleware.HumaMiddleware)
 
-	apiRouter := a.getApiRouter()
+	apiRouter := a.getAPIRouter()
 	router.Mount(a.Config.APIBasePath, apiRouter)
 
 	httpServer := &http.Server{
@@ -74,5 +90,5 @@ func (a *App) createServer() (*http.Server, error) {
 		WriteTimeout: 30 * time.Second,
 	}
 
-	return httpServer, nil
+	a.API = httpServer
 }

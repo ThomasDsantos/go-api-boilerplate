@@ -23,8 +23,8 @@ import (
 type App struct {
 	Config config.ServerConfig
 	files  fs.FS
-	Api    *http.Server
-	Db     *pgxpool.Pool
+	API    *http.Server
+	DB     *pgxpool.Pool
 	Store  *store_pkg.Queries
 }
 
@@ -59,20 +59,15 @@ func (a *App) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-	a.Db = db
-
+	a.DB = db
 	a.Store = store_pkg.New(db)
-
-	srv, err := a.createServer()
-	if err != nil {
-		return fmt.Errorf("failed when creating server: %w", err)
-	}
+	a.createServer()
 
 	errCh := make(chan error, 1)
 	go func() {
-		err := srv.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- fmt.Errorf("failed to listen and serve: %w", err)
+		err2 := a.API.ListenAndServe()
+		if err2 != nil && !errors.Is(err2, http.ErrServerClosed) {
+			errCh <- fmt.Errorf("failed to listen and serve: %w", err2)
 		}
 		close(errCh)
 	}()
@@ -82,12 +77,12 @@ func (a *App) Start(ctx context.Context) error {
 	// Wait until we receive SIGINT (ctrl+c on cli)
 	case <-ctx.Done():
 		break
-	case err := <-errCh:
-		return err
+	case err3 := <-errCh:
+		return err3
 	}
 
 	sCtx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
-	return srv.Shutdown(sCtx)
+	return a.API.Shutdown(sCtx)
 }

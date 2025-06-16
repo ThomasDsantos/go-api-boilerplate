@@ -24,4 +24,3 @@ func main() {
 		log.Err(err).Msgf("failed to start app")
 	}
 }
-

@@ -21,8 +21,6 @@ services:
       watch:
         - action: rebuild
           path: .
-          target: /app/
-          # ignore: ./sqlc/*
     profiles:
       - backend
 
