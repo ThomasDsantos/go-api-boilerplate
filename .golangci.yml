@@ -71,6 +71,7 @@ linters:
     - predeclared # finds code that shadows one of Go's predeclared identifiers
     - promlinter # checks Prometheus metrics naming via promlint
     - protogetter # reports direct reads from proto message fields when getters should be used
+    - reassign # checks that package variables are not reassigned
     - recvcheck # checks for receiver type consistency
     - revive # fast, configurable, extensible, flexible, and beautiful linter for Go, drop-in replacement of golint
     - rowserrcheck # checks whether Err of rows is checked successfully
@@ -200,6 +201,14 @@ linters:
       # Default: true
       strconcat: false
 
+    reassign:
+      # Patterns for global variable names that are checked for reassignment.
+      # See https://github.com/curioswitch/go-reassign#usage
+      # Default: ["EOF", "Err.*"]
+      # Exclude log.Logger from reassignment checks
+      patterns:
+        - ".*"
+
     rowserrcheck:
       # database/sql is always checked.
       # Default: []
@@ -268,6 +277,8 @@ linters:
       - text: 'comment on exported \S+ \S+ should be of the form ".+"'
         source: '// ?(nolint|TODO)'
         linters: [ revive, staticcheck ]
+      - text: 'reassigning variable Logger in other package log'
+        linters: [reassign]
       - path: '_test\.go'
         linters:
           - bodyclose
