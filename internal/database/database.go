@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres" // used for migration
+	_ "github.com/golang-migrate/migrate/v4/source/file"       // used for migration
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -19,87 +19,37 @@ import (
 	"backend/internal/config"
 )
 
-var (
-	ErrMissingMigrationsPath = errors.New("MIGRATIONS_PATH env missing")
-	ErrMissingDatabaseURL    = errors.New("DATABASE_URL env missing")
-)
-
-func loadConfigFromURL() (*pgxpool.Config, error) {
-	dbURL, ok := os.LookupEnv("DATABASE_URL")
-	if !ok {
-		return nil, fmt.Errorf("must set DATABASE_URL env var")
-	}
-
-	config, err := pgxpool.ParseConfig(dbURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
-	}
-
-	return config, nil
-}
-
-func loadConfig() (*pgxpool.Config, error) {
-	cfg, err := config.NewDatabase()
-	if err != nil {
-		return loadConfigFromURL()
-	}
-
-	return pgxpool.ParseConfig(fmt.Sprintf(
-		"user=%s password=%s host=%s port=%d dbname=%s sslmode=%s",
-		cfg.Username, cfg.Password, cfg.Host, cfg.Port, cfg.DBName, cfg.SSLMode,
-	))
-}
-
-func dbURL() (string, error) {
-	cfg, err := config.NewDatabase()
-	if err != nil {
-		dbURL, ok := os.LookupEnv("DATABASE_URL")
-		if !ok {
-			return "", fmt.Errorf("must set DATABASE_URL env var")
-		}
-
-		return dbURL, nil
-	}
-
-	return cfg.URL(), nil
-}
-
 func Connect(ctx context.Context, migrations fs.FS) (*pgxpool.Pool, error) {
-	config, err := loadConfig()
+	config, err := config.LoadConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not extract database config: %w", err)
 	}
 
-	conn, err := pgxpool.NewWithConfig(ctx, config)
+	conn, err := pgxpool.NewWithConfig(ctx, config.PgxConfig)
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to database: %w", err)
 	}
 
 	log.Debug().Msg("Connected to database, Running migrations")
 
-	url, err := dbURL()
-	if err != nil {
-		return nil, err
-	}
-
 	source, err := iofs.New(migrations, "migrations")
 	if err != nil {
 		return nil, fmt.Errorf("create source: %w", err)
 	}
 
-	migrator, err := migrate.NewWithSourceInstance("iofs", source, url)
+	migrator, err := migrate.NewWithSourceInstance("iofs", source, config.DBUrl)
 	if err != nil {
-		return nil, fmt.Errorf("migrate new: %s", err)
+		return nil, fmt.Errorf("migrate new: %w", err)
 	}
 
-	if err := migrator.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	if err2 := migrator.Up(); err2 != nil && !errors.Is(err2, migrate.ErrNoChange) {
+		return nil, fmt.Errorf("failed to migrate database: %w", err2)
 	}
 
 	return conn, nil
 }
 
-func Health(db *pgxpool.Pool) map[string]string {
+func Health(db *pgxpool.Pool) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -110,8 +60,8 @@ func Health(db *pgxpool.Pool) map[string]string {
 	if err != nil {
 		stats["status"] = "down"
 		stats["error"] = fmt.Sprintf("db down: %v", err)
-		log.Fatal().Msgf("db down: %v", err)
-		return stats
+		log.Error().Msgf("db down: %v", err)
+		return stats, err
 	}
 
 	stats["status"] = "up"
@@ -119,13 +69,12 @@ func Health(db *pgxpool.Pool) map[string]string {
 
 	dbStats := db.Stat()
 
-	stats["open_connections"] = fmt.Sprint(dbStats.TotalConns())
-	stats["idle"] = fmt.Sprint(dbStats.IdleConns())
+	stats["open_connections"] = strconv.FormatInt(int64(dbStats.TotalConns()), 10)
+	stats["idle"] = strconv.FormatInt(int64(dbStats.IdleConns()), 10)
 
 	if dbStats.TotalConns() > 40 {
 		stats["message"] = "The database is experiencing heavy load."
 	}
 
-	return stats
+	return stats, nil
 }
-
