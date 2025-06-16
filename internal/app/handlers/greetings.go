@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-
 	"github.com/rs/zerolog/log"
 
 	"backend/internal/app/middleware"

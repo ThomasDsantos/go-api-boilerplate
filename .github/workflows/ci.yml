@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.4'
+        cache: true
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Verify dependencies
+      run: go mod verify
+    
+    - name: Build
+      run: go build -v ./...
+    
+    - name: Run tests
+      run: go test -v ./...
+
+  qa-ci:
+    name: Quality Assurance (golangci-lint)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.4'
+        cache: true
+    
+    - name: Install golangci-lint
+      uses: golangci/golangci-lint-action@v8
+      with:
+        version: latest
+        args: --timeout=5m
+    
+  sqlc-check:
+    name: Check SQLC Generated Files
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.4'
+        cache: true
+    
+    - name: Install SQLC
+      run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+    
+    - name: Generate SQLC files
+      run: make generate-sql
+    
+    - name: Check for uncommitted changes
+      run: |
+        git diff --exit-code --name-only
+        if [ $? -ne 0 ]; then
+          echo "❌ SQLC generated files are not up to date!"
+          echo "Please run 'make generate-sql' and commit the changes."
+          echo ""
+          echo "Files that need to be updated:"
+          git diff --name-only
+          echo ""
+          echo "Diff:"
+          git diff
+          exit 1
+        else
+          echo "✅ SQLC generated files are up to date!"
+        fi
+

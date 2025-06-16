@@ -22,7 +22,6 @@ func NewHealthHandler(db *pgxpool.Pool) *HealthHandler {
 
 func (h *HealthHandler) GetHealth(_ context.Context, _ *models.HealthInput) (*models.HealthOutput, error) {
 	health, err := database.Health(h.PgxPool)
-
 	if err != nil {
 		return nil, huma.Error500InternalServerError("can't get database health")
 	}

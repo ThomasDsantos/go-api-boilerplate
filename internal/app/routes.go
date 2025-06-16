@@ -9,7 +9,6 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
 
