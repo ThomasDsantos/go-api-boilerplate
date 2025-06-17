@@ -1,0 +1,147 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  integration-test:
+    name: Integration Test with PostgreSQL
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.4'
+        cache: true
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Build application
+      run: go build -o app ./main.go
+    
+    - name: Wait for PostgreSQL to be ready
+      run: |
+        until pg_isready -h localhost -p 5432 -U testuser; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+        echo "PostgreSQL is ready!"
+    
+    - name: Start application in background
+      env:
+        DATABASE_URL: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+        SERVER_PORT: 8080
+        LOG_LEVEL: info
+        ENVIRONMENT: test
+      run: |
+        ./app &
+        APP_PID=$!
+        echo "APP_PID=$APP_PID" >> $GITHUB_ENV
+        echo "Application started with PID: $APP_PID"
+    
+    - name: Wait for application to be ready
+      run: |
+        echo "Waiting for application to start..."
+        for i in {1..30}; do
+          if curl -f http://localhost:8080/v1/health >/dev/null 2>&1; then
+            echo "Application is ready!"
+            exit 0
+          fi
+          echo "Attempt $i: Application not ready yet, waiting..."
+          sleep 2
+        done
+        echo "Application failed to start within timeout"
+        exit 1
+    
+    - name: Test health endpoint
+      run: |
+        echo "Testing health endpoint..."
+        
+        # Test that the endpoint returns 200
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/v1/health)
+        if [ "$HTTP_STATUS" != "200" ]; then
+          echo "❌ Health endpoint returned status $HTTP_STATUS, expected 200"
+          exit 1
+        fi
+        echo "✅ Health endpoint returned status 200"
+        
+        # Test the response content
+        RESPONSE=$(curl -s http://localhost:8080/v1/health)
+        echo "Health endpoint response: $RESPONSE"
+        
+        # Check if response contains expected fields
+        if echo "$RESPONSE" | jq -e '.ok' >/dev/null 2>&1; then
+          OK_STATUS=$(echo "$RESPONSE" | jq -r '.ok')
+          if [ "$OK_STATUS" = "true" ]; then
+            echo "✅ Health check status is OK"
+          else
+            echo "❌ Health check status is not OK: $OK_STATUS"
+            exit 1
+          fi
+        else
+          echo "❌ Response does not contain 'ok' field"
+          exit 1
+        fi
+        
+        # Check database status
+        if echo "$RESPONSE" | jq -e '.database.status' >/dev/null 2>&1; then
+          DB_STATUS=$(echo "$RESPONSE" | jq -r '.database.status')
+          if [ "$DB_STATUS" = "up" ]; then
+            echo "✅ Database status is UP"
+          else
+            echo "❌ Database status is not UP: $DB_STATUS"
+            exit 1
+          fi
+        else
+          echo "❌ Response does not contain database status"
+          exit 1
+        fi
+        
+        echo "✅ All health endpoint tests passed!"
+    
+    - name: Show application logs on failure
+      if: failure()
+      run: |
+        echo "=== Application Logs ==="
+        if [ ! -z "$APP_PID" ]; then
+          ps aux | grep -v grep | grep $APP_PID || echo "Application process not found"
+        fi
+        
+        echo "=== PostgreSQL Status ==="
+        pg_isready -h localhost -p 5432 -U testuser || echo "PostgreSQL not ready"
+        
+        echo "=== Network Connections ==="
+        netstat -tlnp | grep :8080 || echo "No process listening on port 8080"
+        netstat -tlnp | grep :5432 || echo "No process listening on port 5432"
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        if [ ! -z "$APP_PID" ]; then
+          echo "Stopping application (PID: $APP_PID)"
+          kill $APP_PID 2>/dev/null || echo "Application already stopped"
+        fi
+
