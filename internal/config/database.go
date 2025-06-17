@@ -7,9 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var (
-	ErrMissingDatabaseURL = errors.New("DATABASE_URL env missing")
-)
+var ErrMissingDatabaseURL = errors.New("DATABASE_URL env missing")
 
 type DatabaseConfig struct {
 	PgxConfig *pgxpool.Config

@@ -7,5 +7,4 @@ type HealthOutput struct {
 	}
 }
 
-type HealthInput struct {
-}
+type HealthInput struct{}

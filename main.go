@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/signal"
 
-	"backend/internal/app"
-
 	"github.com/rs/zerolog/log"
+
+	"backend/internal/app"
 )
 
 //go:embed migrations/*.sql

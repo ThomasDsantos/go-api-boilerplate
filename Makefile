@@ -5,7 +5,7 @@ all: compose
 generate-sql:
 	sqlc generate
 
-lint:
+qa:
 	@echo "*formating*"
 	@docker run --rm -v .:/app -w /app golangci/golangci-lint:v2.1.6 golangci-lint fmt
 	@echo "*running lint*"
